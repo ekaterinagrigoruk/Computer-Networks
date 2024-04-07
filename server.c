@@ -72,9 +72,10 @@ int main() {
 
         read(cs, buffer, MAX_BUF);
         printf("%s\n", buffer);
-        send_file(cs, "packet.h");
+        send_file(cs, buffer);
         close(cs);
     }
+    close(ss);
 
     return 0;
 }
