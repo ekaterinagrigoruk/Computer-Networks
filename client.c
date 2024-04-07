@@ -48,7 +48,8 @@ int main() {
         printf("Connected to the server\n");
     }
 
-    send(cs, "Hello from client", strlen("Hello from client"), 0);
+    char filename[] = "packet.h";
+    send(cs, filename, strlen(filename), 0);
     receive_file(cs, "received_file.txt");
     close(cs);
 
