@@ -4,29 +4,46 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
 #define MAX_BUF 1024
 #define PORT 8080
+#define ROOT_DIR "."
 
-void send_file(int new_socket, char *filename) {
+void handle_request(int client_socket) {
     char buffer[MAX_BUF] = {0};
-    int fd = open(filename, O_RDONLY);
-    if (fd == -1) {
-        perror("open failed");
-        exit(EXIT_FAILURE);
+    int valread = read(client_socket, buffer, MAX_BUF);
+    if (valread <= 0) {
+        printf("Failed to read request\n");
+        return;
     }
-    ssize_t n;
-    while ((n = read(fd, buffer, MAX_BUF)) > 0) {
-        if (send(new_socket, buffer, n, 0) == -1) {
-            perror("send failed");
-            exit(EXIT_FAILURE);
+    printf("Request:\n%s\n", buffer);
+
+    // Extracting requested file path from HTTP request
+    char *token = strtok(buffer, " ");
+    token = strtok(NULL, " ");
+    char filepath[256];
+    sprintf(filepath, "%s%s", ROOT_DIR, token);
+
+    // Open the requested file
+    int fd = open(filepath, O_RDONLY);
+    if (fd < 0) {
+        printf("Failed to open file\n");
+        char response[] = "HTTP/1.1 404 Not Found\nContent-Type: text/html\n\n<html><body><h1>404 Not Found</h1></body></html>";
+        send(client_socket, response, strlen(response), 0);
+    } else {
+        // Sending file content as HTTP response
+        char response_header[] = "HTTP/1.1 200 OK\nContent-Type: text/plain\n\n";
+        send(client_socket, response_header, strlen(response_header), 0);
+        
+        char file_buffer[MAX_BUF];
+        int bytes_read;
+        while ((bytes_read = read(fd, file_buffer, MAX_BUF)) > 0) {
+            send(client_socket, file_buffer, bytes_read, 0);
         }
+        close(fd);
     }
-    close(fd);
 }
 
 int main() {
@@ -70,12 +87,10 @@ int main() {
             printf("Server accept the client\n");
         }
 
-        read(cs, buffer, MAX_BUF);
-        printf("%s\n", buffer);
-        send_file(cs, buffer);
+        handle_request(cs);
+        
         close(cs);
     }
     close(ss);
-
     return 0;
 }
