@@ -10,23 +10,6 @@
 #define MAX_BUF 1024
 #define PORT 8080
 
-void receive_file(int socket, char *filename) {
-    char buffer[MAX_BUF] = {0};
-    int fd = open(filename, O_WRONLY | O_CREAT, 0644);
-    if (fd == -1) {
-        perror("open failed");
-        exit(EXIT_FAILURE);
-    }
-    ssize_t n;
-    while ((n = recv(socket, buffer, MAX_BUF, 0)) > 0) {
-        if (write(fd, buffer, n) != n) {
-            perror("write failed");
-            exit(EXIT_FAILURE);
-        }
-    }
-    close(fd);
-}
-
 int main() {
     int cs = socket(AF_INET, SOCK_STREAM, 0);
     if (cs < 0){
@@ -48,9 +31,17 @@ int main() {
         printf("Connected to the server\n");
     }
 
-    char filename[] = "packet.h";
-    send(cs, filename, strlen(filename), 0);
-    receive_file(cs, "received_file.txt");
+    char request[] = "GET /packet.h HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    send(cs, request, strlen(request), 0);
+
+    char buffer[MAX_BUF];
+    int valread = read(cs, buffer, MAX_BUF);
+    if (valread < 0) {
+        perror("Reading response failed");
+        exit(EXIT_FAILURE);
+    }
+    printf("Response:\n%s\n", buffer);
+    
     close(cs);
 
     return 0;
