@@ -4,31 +4,49 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
 #define MAX_BUF 1024
 #define PORT 8080
+#define ROOT_DIR "."
 
-void execute_command(int new_socket, char *command) {
-    FILE *fp;
+void handle_request(int client_socket) {
     char buffer[MAX_BUF] = {0};
+    int valread = read(client_socket, buffer, MAX_BUF);
+    if (valread <= 0) {
+        printf("Failed to read request\n");
+        return;
+    }
+    printf("Request:\n%s\n", buffer);
 
-    fp = popen(command, "r");
+    char* token = strtok(buffer, " ");
+    token = strtok(NULL, " ");
+    char filepath[MAX_BUF];
+    sprintf(filepath, "%s%s", ROOT_DIR, token);
+
+    FILE* fp = popen(filepath, "r");
     if (fp == NULL) {
-        perror("Error when executing the command");
-        exit(EXIT_FAILURE);
+        printf("Failed to execute file\n");
+        char response[] = "HTTP/1.1 500 Internal Server Error\nContent-Type: text\n\n";
+        send(client_socket, response, strlen(response), 0);
+        return;
     }
 
-    while (fgets(buffer, MAX_BUF, fp) != NULL) {
-        if (send(new_socket, buffer, strlen(buffer), 0) == -1) {
-            perror("Error when sending data");
-            exit(EXIT_FAILURE);
-        }
-    }
+    char response_header[] = "HTTP/1.1 200 OK\nContent-Type: text\n\n";
+    send(client_socket, response_header, strlen(response_header), 0);
 
+    char file_buffer[MAX_BUF];
+    int bytes_read;
+    while (fgets(file_buffer, sizeof(file_buffer)-1, fp) != NULL) {
+        send(client_socket, file_buffer, strlen(file_buffer), 0);
+        printf("%s", file_buffer);
+    }
+    
+    //while ((bytes_read = fread(file_buffer, 1, MAX_BUF, fp)) > 0) {
+        //send(client_socket, file_buffer, bytes_read, 0);
+    //}
+    
     pclose(fp);
 }
 
@@ -73,9 +91,8 @@ int main() {
             printf("Server accept the client\n");
         }
 
-        read(cs, buffer, MAX_BUF);
-        printf("%s\n", buffer);
-        execute_command(cs, buffer);
+        handle_request(cs);
+        
         close(cs);
     }
     close(ss);
